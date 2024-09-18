@@ -189,7 +189,9 @@ class HTMLCompiler {
 
       if (!attr[2]) {
         // not equals anything, solo tag
-        attrs[attr[1]] = true;
+        if (attr[1]) {
+          attrs[attr[1]] = true;
+        }
         continue;
       }
       if (attr[2] !== '=') {
