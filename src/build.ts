@@ -39,7 +39,7 @@ export function buildTemplate(raw: string, unsafeName: string) {
 
         case 'html':
           propsOptional.add(part.render);
-          return `\${ifDefinedMaybeSafe(${c(part.render)})}`;
+          return `\${renderBody(${c(part.render)})}`;
 
         case 'attr-boolean':
           propsOptional.add(part.render);

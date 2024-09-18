@@ -1,3 +1,3 @@
-import { templateIndex } from './test.ts';
+import { templatePage } from './test.ts';
 
-console.info(templateIndex({ foo: 'zing', required: 123 }).toString());
+console.info(templatePage({ content: ['1', '2'] }).toString());

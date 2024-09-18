@@ -10,12 +10,23 @@ export const ifDefined = (raw: unknown, render?: (raw: string) => string) => {
   return render(encodeURI(String(raw)));
 };
 
-export const ifDefinedMaybeSafe = (raw: unknown) => {
+export const renderBody = (raw: unknown) => {
   if (raw == null) {
     return '';
   }
   if ((raw as any)[unsafe]) {
     return String(raw);
   }
+
+  if (typeof raw !== 'string' && (raw as any)[Symbol.iterator]) {
+    const out: string[] = [];
+
+    for (const each of raw as Iterable<unknown>) {
+      out.push(renderBody(each));
+    }
+
+    return out.join(''); // no commas hedre
+  }
+
   return encodeURI(String(raw));
 };
