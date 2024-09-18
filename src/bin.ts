@@ -21,9 +21,7 @@ for (const c of contents) {
   }
 
   const raw = fs.readFileSync(path.join(templatePath, c), 'utf-8');
-  const { template, props } = buildTemplate(raw, 'unsafe');
-
-  const propStr = props.map((prop) => JSON.stringify(prop)).join(' | ');
+  const { template, typeString } = buildTemplate(raw, 'unsafe');
 
   const { name } = path.parse(c);
   const cc = toCamelCase(name);
@@ -33,7 +31,7 @@ for (const c of contents) {
   seenNames.add(cc);
 
   console.info(
-    `\nexport const template${cc} = (context: Record<${propStr}, unknown>): { toString(): string } => {
+    `\nexport const template${cc} = (context: ${typeString}): { toString(): string } => {
   const out = ${template};
   return {
     toString() { return out; },
@@ -42,6 +40,10 @@ for (const c of contents) {
   };
 };`,
   );
+}
+
+if (seenNames.size === 0) {
+  throw new Error(`found no templates?`);
 }
 
 function toCamelCase(raw: string) {

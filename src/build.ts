@@ -19,7 +19,8 @@ export function buildTemplate(raw: string, unsafeName: string) {
     }
   }
 
-  const props = new Set<string>();
+  const propsRequired = new Set<string>();
+  const propsOptional = new Set<string>();
 
   c.output = coalesceParts(c.output);
 
@@ -30,18 +31,22 @@ export function buildTemplate(raw: string, unsafeName: string) {
       }
 
       const c = (name: string) => `context[${JSON.stringify(name)}]`;
+      const checkNull = (name: string, rest: string) => `${c(name)} == null ? '' : ${rest}`;
 
       switch (part.mode) {
         case 'comment':
-          props.add(part.render);
+          propsOptional.add(part.render);
           return `\${encodeURI(String(${c(part.render)}))}`;
         case 'html': {
-          props.add(part.render);
+          propsOptional.add(part.render);
           const v = c(part.render);
-          return `\${(${v} as any)[${unsafeName}] ? String(${v}) : encodeURI(String(${v}))}`;
+          return `\${${v} == null ? '' : (${v} as any)[${unsafeName}] ? String(${v}) : encodeURI(${checkNull(
+            part.render,
+            `String(${v})`,
+          )})}`;
         }
         case 'attr-boolean':
-          props.add(part.render);
+          propsOptional.add(part.render);
           return `\${${c(part.render)} ? ' ${part.attr}' : ''}`;
         case 'attr':
           return (
@@ -51,17 +56,46 @@ export function buildTemplate(raw: string, unsafeName: string) {
                 if (!(index % 2)) {
                   return subpart;
                 }
-                props.add(subpart);
+                propsRequired.add(subpart);
                 return `\${encodeURI(String(${c(subpart)}))}`;
               })
               .join('') +
             '"'
           );
+        case 'attr-render': {
+          propsOptional.add(part.render);
+          const v = c(part.render);
+          return `\${${checkNull(part.render, `\` ${part.attr}="\${String(${v})}\``)}}"`;
+          //          return `\${${v} == null ? '' : \` ${part.attr}=\${String(${v})}\`}`;
+        }
+        default:
+          part satisfies never;
       }
     })
     .join('');
 
-  return { template: '`' + inner + '`', props: [...props] };
+  const stringProps = (i: Iterable<string>) => {
+    return [...i].map((s) => JSON.stringify(s)).join(' | ');
+  };
+  const typeParts: string[] = [];
+
+  // make props required if optional
+  for (const required of propsRequired) {
+    propsOptional.delete(required);
+  }
+
+  if (propsRequired.size) {
+    typeParts.push(`Record<${stringProps(propsRequired)}, unknown>`);
+  }
+  if (propsOptional.size) {
+    typeParts.push(`Partial<Record<${stringProps(propsOptional)}, unknown>>`);
+  }
+  if (!typeParts.length) {
+    typeParts.push(`Record<never, never>`);
+  }
+  const typeString = typeParts.join(' & ');
+
+  return { template: '`' + inner + '`', typeString };
 }
 
 type Part =
@@ -72,6 +106,11 @@ type Part =
   | {
       mode: 'attr';
       parts: string[]; // always odd: e.g., string,part,string,part,string
+    }
+  | {
+      mode: 'attr-render';
+      attr: string;
+      render: string;
     }
   | {
       mode: 'attr-boolean';
@@ -254,6 +293,7 @@ class HTMLCompiler {
   }
 
   internalRenderKeyValue(key: string, value: string | true): PartArray {
+    // optional prop shorthand
     if (key.startsWith('?')) {
       key = key.substring(1);
 
@@ -268,6 +308,15 @@ class HTMLCompiler {
       return [{ mode: 'attr-boolean', attr: key, render: s[1] }];
     }
 
+    // ":content" shorthand
+    if (key.startsWith(':')) {
+      key = key.substring(1);
+      if (!key) {
+        throw new Error(`must bind :-value`);
+      }
+      return [{ mode: 'attr-render', attr: key, render: key }];
+    }
+
     if (value === true) {
       return [' ', key];
     }
@@ -279,6 +328,10 @@ class HTMLCompiler {
     if (s.length === 1) {
       // no renderable parts
       return [` ${key}="${s[0]}"`];
+    }
+    if (s.length === 3 && !s[0] && !s[2]) {
+      // special maybe-renderable
+      return [{ mode: 'attr-render', attr: key, render: s[1] }];
     }
 
     // we MUST have parts now

@@ -1,13 +1,18 @@
 {
   "devDependencies": {
-    "@types/node": "^20.3.1"
+    "@types/node": "^20.3.1",
+    "esbuild": "^0.23.1"
   },
   "type": "module",
   "scripts": {
-    "test": "tsx test/"
+    "prepublishOnly": "node --run build:bin",
+    "build:bin": "esbuild --outfile=bin.js --format=esm --platform=node --bundle src/bin.ts"
   },
-  "private": true,
+  "bin": {
+    "html-template-compiler": "./bin.js"
+  },
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
-  "name": "html-template-compiler"
+  "name": "html-template-compiler",
+  "version": "0.0.1"
 }
