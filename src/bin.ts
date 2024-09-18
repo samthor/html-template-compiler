@@ -1,27 +1,39 @@
-import { buildTemplate } from './src/index.ts';
+/**
+ * Emits TS code that renders all templates in the given folder (or current dir).
+ */
+
+import { buildTemplate } from './build.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+const templatePath = process.argv[2] ?? '.';
 
 console.info(`// Generated on ${new Date()}
 
 const unsafe = Symbol.for('html-template-compiler:unsafe');`);
 
-const contents = fs.readdirSync('templates');
+const seenNames = new Set<string>();
+
+const contents = fs.readdirSync(templatePath);
 for (const c of contents) {
   if (!c.endsWith('.html')) {
     continue;
   }
 
-  const raw = fs.readFileSync(path.join('templates', c), 'utf-8');
+  const raw = fs.readFileSync(path.join(templatePath, c), 'utf-8');
   const { template, props } = buildTemplate(raw, 'unsafe');
 
   const propStr = props.map((prop) => JSON.stringify(prop)).join(' | ');
 
   const { name } = path.parse(c);
+  const cc = toCamelCase(name);
+  if (seenNames.has(cc)) {
+    throw new Error(`duplicate name: ${name} => ${cc}`);
+  }
+  seenNames.add(cc);
+
   console.info(
-    `\nexport const template${toCamelCase(
-      name,
-    )} = (context: Record<${propStr}, unknown>): { toString(): string } => {
+    `\nexport const template${cc} = (context: Record<${propStr}, unknown>): { toString(): string } => {
   const out = ${template};
   return {
     toString() { return out; },

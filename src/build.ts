@@ -3,7 +3,13 @@ const tagNameRe = /([^\s>]*)/gy;
 const attrRe = /\s*([^\s/>=]*)(=|)/gy;
 const tagSuffixRe = /\s*\/?>/gy;
 
-export function parse(raw: string) {
+/**
+ * Builds a template literal from the passed HTML source. May throw if the source is invalid.
+ *
+ * Uses the `unsafeName` key to check if passed values are safe to be included unescaped inside
+ * HTML.
+ */
+export function buildTemplate(raw: string, unsafeName: string) {
   const c = new HTMLCompiler(raw);
 
   for (;;) {
@@ -32,7 +38,7 @@ export function parse(raw: string) {
         case 'html': {
           props.add(part.render);
           const v = c(part.render);
-          return `\${(${v} as any)[unsafe] ? String(${v}) : encodeURI(String(${v}))}`;
+          return `\${(${v} as any)[${unsafeName}] ? String(${v}) : encodeURI(String(${v}))}`;
         }
         case 'attr-boolean':
           props.add(part.render);

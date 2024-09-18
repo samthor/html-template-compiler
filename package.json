@@ -8,5 +8,6 @@
   },
   "private": true,
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "name": "html-template-compiler"
 }
