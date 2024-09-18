@@ -9,7 +9,7 @@ const tagSuffixRe = /\s*\/?>/gy;
  * Uses the `unsafeName` key to check if passed values are safe to be included unescaped inside
  * HTML.
  */
-export function buildTemplate(raw: string, unsafeName: string) {
+export function buildTemplate(raw: string) {
   const c = new HTMLCompiler(raw);
 
   for (;;) {

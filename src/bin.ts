@@ -37,7 +37,7 @@ out.push('\n');
 
 if (opts.values.import) {
   // import from this package
-  out.push(`import { unsafe, ifDefined, ifDefinedMaybeSafe } from 'html-template-compiler';\n`);
+  out.push(`import { unsafe, escape, ifDefined, renderBody } from 'html-template-compiler';\n`);
 } else {
   // embed this package
   let raw: string;
@@ -55,11 +55,13 @@ if (opts.values.import) {
   out.push(raw);
 }
 
+out.push(`\n// ${all.length} templates`);
+
 const seenNames = new Set<string>();
 
 for (const c of all) {
   const raw = fs.readFileSync(c, 'utf-8');
-  const { template, typeString } = buildTemplate(raw, 'unsafe');
+  const { template, typeString } = buildTemplate(raw);
 
   const { name } = path.parse(c);
   const cc = toCamelCase(name);
@@ -69,14 +71,7 @@ for (const c of all) {
   seenNames.add(cc);
 
   out.push(
-    `\nexport const template${cc} = (context: ${typeString}): { toString(): string } => {
-  const out = ${template};
-  return {
-    toString() { return out; },
-    // @ts-ignore
-    [unsafe]: true,
-  };
-};`,
+    `\n\nexport const template${cc} = (context: ${typeString}): { toString(): string } => unsafe(${template});`,
   );
 }
 
