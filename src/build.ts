@@ -31,23 +31,20 @@ export function buildTemplate(raw: string, unsafeName: string) {
       }
 
       const c = (name: string) => `context[${JSON.stringify(name)}]`;
-      const checkNull = (name: string, rest: string) => `${c(name)} == null ? '' : ${rest}`;
 
       switch (part.mode) {
         case 'comment':
           propsOptional.add(part.render);
-          return `\${encodeURI(String(${c(part.render)}))}`;
-        case 'html': {
+          return `\${ifDefined(${c(part.render)})}`;
+
+        case 'html':
           propsOptional.add(part.render);
-          const v = c(part.render);
-          return `\${${v} == null ? '' : (${v} as any)[${unsafeName}] ? String(${v}) : encodeURI(${checkNull(
-            part.render,
-            `String(${v})`,
-          )})}`;
-        }
+          return `\${ifDefinedMaybeSafe(${c(part.render)})}`;
+
         case 'attr-boolean':
           propsOptional.add(part.render);
           return `\${${c(part.render)} ? ' ${part.attr}' : ''}`;
+
         case 'attr':
           return (
             '"' +
@@ -57,17 +54,16 @@ export function buildTemplate(raw: string, unsafeName: string) {
                   return subpart;
                 }
                 propsRequired.add(subpart);
-                return `\${encodeURI(String(${c(subpart)}))}`;
+                return `\${ifDefined(${c(subpart)})}`;
               })
               .join('') +
             '"'
           );
-        case 'attr-render': {
+
+        case 'attr-render':
           propsOptional.add(part.render);
-          const v = c(part.render);
-          return `\${${checkNull(part.render, `\` ${part.attr}="\${String(${v})}\``)}}"`;
-          //          return `\${${v} == null ? '' : \` ${part.attr}=\${String(${v})}\`}`;
-        }
+          return `\${ifDefined(${c(part.render)}, (v) => \` ${part.attr}="\${v}"\`)}`;
+
         default:
           part satisfies never;
       }

@@ -5,11 +5,19 @@
   },
   "type": "module",
   "scripts": {
-    "prepublishOnly": "node --run build:bin",
-    "build:bin": "esbuild --outfile=bin.js --format=esm --platform=node --bundle src/bin.ts"
+    "prepublishOnly": "node --run build:bin && node --run build:lib",
+    "build:bin": "esbuild --outfile=bin.js --format=esm --platform=node --bundle src/bin.ts",
+    "build:lib": "esbuild --outfile=lib.js --format=esm --bundle src/lib.ts"
   },
   "bin": {
     "html-template-compiler": "./bin.js"
+  },
+  "types": "./src/lib.ts",
+  "exports": {
+    ".": {
+      "import": "./lib.js",
+      "types": "./src/lib.ts"
+    }
   },
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
