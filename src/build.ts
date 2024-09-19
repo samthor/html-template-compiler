@@ -24,7 +24,9 @@ export function buildTemplate(raw: string) {
 
   const recordProp = (name: string, required?: boolean) => {
     const [left] = name.split('.');
-    if (required) {
+    if (left.startsWith('_')) {
+      // ignore
+    } else if (required) {
       propsRequired.add(left);
     } else {
       propsOptional.add(left);
@@ -50,7 +52,7 @@ export function buildTemplate(raw: string) {
 
         recordProp(name);
         const parts = name.split('.');
-        return `context` + parts.map((part) => `[${JSON.stringify(part)}]`).join('?.');
+        return `(context as any)` + parts.map((part) => `[${JSON.stringify(part)}]`).join('?.');
       };
 
       switch (part.mode) {

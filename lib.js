@@ -24,6 +24,27 @@ var ifDefined = (raw, render) => {
   const out = escape(String(raw));
   return render === void 0 ? out : render(out);
 };
+var ifCheck = (raw, truthy, falsey) => {
+  try {
+    if (raw && typeof raw === "object" && "toString" in raw) {
+      raw = raw.toString();
+    }
+  } catch {
+  }
+  return (raw ? truthy() : falsey?.()) || "";
+};
+var loop = (raw, cb, empty) => {
+  const parts = [];
+  if (raw && raw[Symbol.iterator]) {
+    for (const x of raw) {
+      parts.push(cb(x));
+    }
+  }
+  if (!parts.length && empty) {
+    return empty();
+  }
+  return parts.join("");
+};
 var renderBody = (raw) => {
   if (raw == null) {
     return "";
@@ -42,7 +63,9 @@ var renderBody = (raw) => {
 };
 export {
   escape,
+  ifCheck,
   ifDefined,
+  loop,
   renderBody,
   unsafe
 };
