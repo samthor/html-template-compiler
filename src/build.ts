@@ -22,6 +22,15 @@ export function buildTemplate(raw: string) {
   const propsRequired = new Set<string>();
   const propsOptional = new Set<string>();
 
+  const recordProp = (name: string, required?: boolean) => {
+    const [left] = name.split('.');
+    if (required) {
+      propsRequired.add(left);
+    } else {
+      propsOptional.add(left);
+    }
+  };
+
   c.output = coalesceParts(c.output);
 
   const inner = c.output
@@ -30,19 +39,28 @@ export function buildTemplate(raw: string) {
         return part.replaceAll('`', '\\`');
       }
 
-      const c = (name: string) => `context[${JSON.stringify(name)}]`;
+      const c = (name: string) => {
+        if (!/[0-9a-zA-Z_]/.test(name[0])) {
+          throw new Error(`invalid context name: ${name}`);
+        }
+
+        if (name.startsWith('_')) {
+          return name;
+        }
+
+        recordProp(name);
+        const parts = name.split('.');
+        return `context` + parts.map((part) => `[${JSON.stringify(part)}]`).join('?.');
+      };
 
       switch (part.mode) {
         case 'comment':
-          propsOptional.add(part.render);
           return `\${ifDefined(${c(part.render)})}`;
 
         case 'html':
-          propsOptional.add(part.render);
           return `\${renderBody(${c(part.render)})}`;
 
         case 'attr-boolean':
-          propsOptional.add(part.render);
           return `\${${c(part.render)} ? ' ${part.attr}' : ''}`;
 
         case 'attr':
@@ -53,7 +71,7 @@ export function buildTemplate(raw: string) {
                 if (!(index % 2)) {
                   return subpart;
                 }
-                propsRequired.add(subpart);
+                recordProp(subpart, true); // extra because we MUST be required
                 return `\${ifDefined(${c(subpart)})}`;
               })
               .join('') +
@@ -61,8 +79,21 @@ export function buildTemplate(raw: string) {
           );
 
         case 'attr-render':
-          propsOptional.add(part.render);
           return `\${ifDefined(${c(part.render)}, (v) => \` ${part.attr}="\${v}"\`)}`;
+
+        case 'logic-conditional': {
+          const invert = part.invert ? '!' : '';
+          return `\${ifCheck(${invert}${c(part.render)}, () => \``;
+        }
+
+        case 'logic-loop':
+          return `\${loop(${c(part.render)}, (_${part.use}) => \``;
+
+        case 'logic-else':
+          return `\`, () => \``;
+
+        case 'logic-close':
+          return '`)}';
 
         default:
           part satisfies never;
@@ -112,6 +143,22 @@ type Part =
       mode: 'attr-boolean';
       attr: string;
       render: string;
+    }
+  | {
+      mode: 'logic-conditional';
+      render: string;
+      invert: boolean;
+    }
+  | {
+      mode: 'logic-loop';
+      render: string;
+      use: string;
+    }
+  | {
+      mode: 'logic-else';
+    }
+  | {
+      mode: 'logic-close';
     };
 
 type PartArray = (string | Part)[];
@@ -374,8 +421,49 @@ function splitTextForParts(raw: string, mode: 'html' | 'comment'): PartArray {
     if (part.index !== index) {
       out.push(raw.substring(index, part.index));
     }
-    out.push({ mode, render: part[1].trim() });
     index = part.index + part[0].length;
+
+    const render = part[1].trim();
+
+    // TODO: if render starts with custom code...
+
+    if (/[0-9a-zA-Z_]/.test(render[0])) {
+      out.push({ mode, render });
+      continue;
+    }
+
+    switch (render[0]) {
+      case '~': {
+        let v;
+        let invert = false;
+        if (render[1] === '!') {
+          v = render.substring(2);
+          invert = true;
+        } else {
+          v = render.substring(1);
+        }
+
+        out.push({ mode: 'logic-conditional', invert, render: v.trim() });
+        continue;
+      }
+
+      case '>': {
+        const [check, use = ''] = render.substring(1).trim().split(/\s+/);
+        out.push({ mode: 'logic-loop', render: check, use });
+        continue;
+      }
+
+      case '|':
+        out.push({ mode: 'logic-else' });
+        continue;
+
+      case '<':
+        out.push({ mode: 'logic-close' });
+        continue;
+
+      default:
+        throw new Error(`unknown code: ${render}`);
+    }
   }
 }
 

@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
   </head>
-  <body>
-    {{content}}
+  <body ?disabled="{{disabled}}">
+    {{content}} {{~emoji}} There is an emoji here: {{emoji}} {{<}} {{>loopable foo}} Iter:
+    {{_foo}}<br />
+    {{|}} No items available {{<}}
   </body>
 </html>

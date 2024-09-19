@@ -1,19 +1,34 @@
 // src/lib.ts
-var unsafe = Symbol.for("html-template-compiler:unsafe");
+var unsafeSymbol = Symbol.for("html-template-compiler:unsafe");
+var escapeMap = {
+  "<": "&lt;",
+  ">": "&gt;",
+  "&": "&amp;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+var unsafe = (raw) => {
+  return {
+    toString() {
+      return String(raw);
+    },
+    // @ts-ignore
+    [unsafeSymbol]: true
+  };
+};
+var escape = (raw) => raw.replaceAll(/[<>&"']/g, (x) => escapeMap[x]);
 var ifDefined = (raw, render) => {
   if (raw == null) {
     return "";
   }
-  if (render === void 0) {
-    return encodeURI(String(raw));
-  }
-  return render(encodeURI(String(raw)));
+  const out = escape(String(raw));
+  return render === void 0 ? out : render(out);
 };
 var renderBody = (raw) => {
   if (raw == null) {
     return "";
   }
-  if (raw[unsafe]) {
+  if (raw[unsafeSymbol]) {
     return String(raw);
   }
   if (typeof raw !== "string" && raw[Symbol.iterator]) {
@@ -23,9 +38,10 @@ var renderBody = (raw) => {
     }
     return out.join("");
   }
-  return encodeURI(String(raw));
+  return escape(String(raw));
 };
 export {
+  escape,
   ifDefined,
   renderBody,
   unsafe

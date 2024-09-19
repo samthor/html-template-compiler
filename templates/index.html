@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
-  <body :foo>
-    {{hello}} whatever
+  <body :foo ?disabled="{{disabled}}">
+    {{~hello}} Hello exists {{<}} {{hello}} whatever {{zing.foo}} {{>loop}} {{_}} {{<}}
+
     <x attr="x-{{required}}" what="{{optional}}"></x>
   </body>
 </html>
