@@ -1,83 +1,61 @@
+import { coalesceParts, oddSplitForParts, splitForParts, type PartArray } from './parts.ts';
+
 const interestingRe = /\<[\/\w!]/g; // not sticky, goes over content
 const tagNameRe = /([^\s>]*)/gy;
 const attrRe = /\s*([^\s/>=]*)(=|)/gy;
 const tagSuffixRe = /\s*\/?>/gy;
 
-export type Part =
-  | {
-      mode: 'html' | 'comment';
-      render: string;
-    }
-  | {
-      mode: 'attr';
-      parts: string[]; // always odd: e.g., string,part,string,part,string
-    }
-  | {
-      mode: 'attr-render';
-      attr: string;
-      render: string;
-    }
-  | {
-      mode: 'attr-boolean';
-      attr: string;
-      render: string;
-    }
-  | {
-      mode: 'logic-conditional';
-      render: string;
-      invert: boolean;
-    }
-  | {
-      mode: 'logic-loop';
-      render: string;
-      use: string;
-    }
-  | {
-      mode: 'logic-else';
-    }
-  | {
-      mode: 'logic-close';
-    };
-
-export type PartArray = (string | Part)[];
-
 export class HTMLCompiler {
-  index: number = 0;
-  output: PartArray = [];
+  private index: number = 0;
+  private output: PartArray = [];
 
   constructor(public src: string) {}
 
+  allParts(): PartArray {
+    return coalesceParts(this.output);
+  }
+
   /**
-   * Consumes a doctype, comment, tag.
+   * Consumes a top-level item: text, a comment (including doctype), a tag.
    */
-  consumeTopLevel() {
+  consumeTopLevel(): 'tag' | 'comment' | 'text' | '' {
+    if (this.index === this.src.length) {
+      return ''; // done
+    }
+
     interestingRe.lastIndex = this.index;
     const next = interestingRe.exec(this.src);
 
+    // there's nothing more interesting: consume text until the dend
     if (!next) {
-      if (this.index < this.src.length) {
-        this.createText(this.src.substring(this.index, this.src.length));
-      }
+      this.createText(this.src.substring(this.index, this.src.length));
       this.index = this.src.length;
-      return false;
+      return 'text';
     }
 
+    // the next index is >= here, consume text until then
     if (next.index > this.index) {
       this.createText(this.src.substring(this.index, next.index));
       this.index = next.index;
+      return 'text';
     }
+
+    // is this a comment or a tag?
     const s = next[0];
-
     if (s[1] === '!') {
-      // comment
+      // consume comment
       this.mustConsumeComment();
-      return true;
+      return 'comment';
     }
 
+    // consume tag
     this.mustConsumeTag();
-    return true;
+    return 'tag';
   }
 
+  /**
+   * Consume tag at this location.
+   */
   private mustConsumeTag() {
     if (this.src[this.index] !== '<') {
       throw new Error(`can't consume tag, bad pos`);
@@ -179,16 +157,12 @@ export class HTMLCompiler {
     return v;
   }
 
-  /**
-   * Consume tag at this location.
-   */
-
   private createComment(s: string) {
-    this.output.push(...splitTextForParts(s, 'comment'));
+    this.output.push(...splitForParts(s, 'comment'));
   }
 
   private createText(s: string) {
-    this.output.push(...splitTextForParts(s, 'html'));
+    this.output.push(...splitForParts(s, 'text'));
   }
 
   private createTag(
@@ -201,6 +175,8 @@ export class HTMLCompiler {
     //   isClose: arg.isClose,
     //   selfClosing: arg.selfClosing,
     // });
+
+    // TODO: look for special tags (e.g., "hc:if", "hc:for" ...)
 
     // rebuild output
     this.output.push(`<${arg.isClose ? '/' : ''}${tagName}`);
@@ -260,112 +236,4 @@ export class HTMLCompiler {
     // we MUST have parts now
     return [` ${key}=`, { mode: 'attr', parts: s }];
   }
-}
-
-const partRe = /{{(.*?)}}/g;
-
-function oddSplitForParts(raw: string): string[] {
-  const out: string[] = [];
-  let index = 0;
-
-  for (;;) {
-    partRe.lastIndex = index;
-    const part = partRe.exec(raw);
-    if (!part) {
-      out.push(raw.substring(index));
-      return out;
-    }
-
-    out.push(raw.substring(index, part.index));
-    out.push(part[1].trim());
-    index = part.index + part[0].length;
-  }
-}
-
-function splitTextForParts(raw: string, mode: 'html' | 'comment'): PartArray {
-  const out: PartArray = [];
-  let index = 0;
-
-  for (;;) {
-    partRe.lastIndex = index;
-    const part = partRe.exec(raw);
-    if (!part) {
-      if (index !== raw.length) {
-        out.push(raw.substring(index));
-      }
-      return out;
-    }
-
-    if (part.index !== index) {
-      out.push(raw.substring(index, part.index));
-    }
-    index = part.index + part[0].length;
-
-    const render = part[1].trim();
-
-    // TODO: if render starts with custom code...
-
-    if (/[0-9a-zA-Z_]/.test(render[0])) {
-      out.push({ mode, render });
-      continue;
-    }
-
-    switch (render[0]) {
-      case '~': {
-        let v;
-        let invert = false;
-        if (render[1] === '!') {
-          v = render.substring(2);
-          invert = true;
-        } else {
-          v = render.substring(1);
-        }
-
-        out.push({ mode: 'logic-conditional', invert, render: v.trim() });
-        continue;
-      }
-
-      case '>': {
-        const [check, use = ''] = render.substring(1).trim().split(/\s+/);
-        out.push({ mode: 'logic-loop', render: check, use });
-        continue;
-      }
-
-      case '|':
-        out.push({ mode: 'logic-else' });
-        continue;
-
-      case '<':
-        out.push({ mode: 'logic-close' });
-        continue;
-
-      default:
-        throw new Error(`unknown code: ${render}`);
-    }
-  }
-}
-
-export function coalesceParts(parts: PartArray): PartArray {
-  const out: PartArray = [];
-  let strings: string[] = [];
-
-  for (const p of parts) {
-    if (typeof p === 'string') {
-      if (p.length) {
-        strings.push(p);
-      }
-      continue;
-    }
-
-    if (strings.length) {
-      out.push(strings.join(''));
-      strings = [];
-    }
-    out.push(p);
-  }
-
-  if (strings.length) {
-    out.push(strings.join(''));
-  }
-  return out;
 }

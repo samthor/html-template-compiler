@@ -6,6 +6,7 @@ import { buildTemplate } from './build.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
+import { getLibNames } from './scriptinfo.ts';
 
 const opts = parseArgs({
   args: process.argv,
@@ -37,20 +38,23 @@ out.push('\n');
 
 if (opts.values.import) {
   // import from this package
-  out.push(`import { unsafe, escape, ifDefined, renderBody } from 'html-template-compiler';\n`);
+  const libNames = await getLibNames();
+  out.push(`import { ${libNames.join(', ')} } from 'html-template-compiler';\n`);
 } else {
   // embed this package
   let raw: string;
 
   try {
-    // deployed ver, nested
+    // deployed ver, nested _original_ source
     const u = new URL('./src/lib.ts', import.meta.url);
     raw = fs.readFileSync(u, 'utf-8');
   } catch (e) {
+    // test local version
     const u = new URL('./lib.ts', import.meta.url);
     raw = fs.readFileSync(u, 'utf-8');
   }
 
+  // TODO: very lazy "non export" version
   raw = raw.replaceAll(/^export /gm, '');
   out.push(raw);
 }

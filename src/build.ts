@@ -1,4 +1,4 @@
-import { coalesceParts, HTMLCompiler } from './lib/html-compiler.ts';
+import { HTMLCompiler } from './lib/html-compiler.ts';
 
 /**
  * Builds a template literal from the passed HTML source. May throw if the source is invalid.
@@ -30,9 +30,8 @@ export function buildTemplate(raw: string) {
     }
   };
 
-  c.output = coalesceParts(c.output);
-
-  const inner = c.output
+  const parts = c.allParts();
+  const inner = parts
     .map((part) => {
       if (typeof part === 'string') {
         return part.replaceAll('`', '\\`');
