@@ -65,7 +65,7 @@ const seenNames = new Set<string>();
 
 for (const c of all) {
   const raw = fs.readFileSync(c, 'utf-8');
-  const { template, typeString } = buildTemplate(raw);
+  const { template, typeString, anyRequired } = buildTemplate(raw);
 
   const { name } = path.parse(c);
   const cc = toCamelCase(name);
@@ -73,9 +73,13 @@ for (const c of all) {
     throw new Error(`duplicate name: ${name} => ${cc}`);
   }
   seenNames.add(cc);
+  const qualifier = anyRequired ? '' : '?';
 
   out.push(
-    `\n\nexport const template${cc} = (context: ${typeString}): { toString(): string } => unsafe(${template});`,
+    `
+
+export type Template${cc} = ${typeString};
+export const template${cc} = (context${qualifier}: Template${cc}): { toString(): string } => unsafe(${template});`,
   );
 }
 

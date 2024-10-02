@@ -16,6 +16,11 @@ export class TypeScope {
     const parts = name.split('.');
 
     let curr = this.layout;
+    if (required) {
+      // TODO: does this break iterables?
+      curr[requiredSymbol] = true;
+    }
+
     for (const p of parts) {
       const prev = curr[p];
       if (prev === undefined) {
@@ -73,9 +78,11 @@ export class TypeScope {
   }
 
   generateType() {
-    console.warn(this.layout);
-
     return this.internalGenerateType(this.layout, '');
+  }
+
+  anyRequired() {
+    return requiredSymbol in this.layout;
   }
 
   private internalGenerateType(node: Record<string | symbol, any>, indent: string): string {

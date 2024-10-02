@@ -24,6 +24,6 @@ console.info(
     disabled: false,
     content: ['Hello <there>', '...2'],
     emoji: 'butt',
-    loopable: [{ bar: 1 }, { bar: 2 }],
+    loopable: [{ zing: 1 }, { bar: 2, zing: 'hello' }],
   }).toString(),
 );

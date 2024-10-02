@@ -103,5 +103,5 @@ export function buildTemplate(raw: string) {
     .join('');
 
   const typeString = ts.generateType();
-  return { template: '`' + inner + '`', typeString };
+  return { template: '`' + inner + '`', typeString, anyRequired: ts.anyRequired() };
 }

@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
   </head>
-  <body ?disabled="{{disabled}}" longProp="hello {{bob.there}}">
+  <body ?disabled="{{disabled}}" longProp="{{bob.there}}">
     <butt />
     {{something.has.a.prop}} {{content}} {{~emoji}} There is an emoji here: {{emoji}} {{<}}
     {{>loopable foo}} Foo.bar: {{foo.bar}}<br />
+    <prop-check name="force {{foo.zing}}" />
     {{|}} No items available {{<}}
   </body>
 </html>
