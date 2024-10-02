@@ -54,20 +54,15 @@ export class HTMLCompiler {
   }
 
   /**
-   * Consume tag at this location.
+   * Consume a tag at this location. Traverses all attributes.
    */
   private mustConsumeTag() {
     if (this.src[this.index] !== '<') {
       throw new Error(`can't consume tag, bad pos`);
     }
 
-    const start = this.index; // include "<"
     const isClose = this.src[this.index + 1] === '/';
-    if (isClose) {
-      this.index += 2;
-    } else {
-      ++this.index;
-    }
+    this.index += isClose ? 2 : 1; // step over start
 
     tagNameRe.lastIndex = this.index;
     const tagName = tagNameRe.exec(this.src)![0];
@@ -134,25 +129,32 @@ export class HTMLCompiler {
     this.index = endIndex;
   }
 
+  /**
+   * Consume content that appears after an attribute "=".
+   */
   private eatAttributeValue(): string {
     let re: RegExp;
 
     const start = this.src[this.index];
 
     if (start === '{' && this.src[this.index + 1] === '{') {
+      // this allows `foo={{bar}}` _without_ quotes
       re = /({{.*?}})/gy;
     } else if (start === '"') {
+      // match everything within quotes (non-aggressively)
+      // TODO: this will barf on `foo="{{bar + "zing"}}"`
       re = /\"(.*?)\"]*/gy;
     } else {
+      // match `whatever=zing` which is wrong but we'll later emit in quotes
       re = /([^\s/>]*)/gy;
     }
     re.lastIndex = this.index;
     const out = re.exec(this.src);
     if (!out) {
-      throw new Error(`bad attribute`);
+      return '';
     }
 
-    const v = out[1] ?? '';
+    const v = out?.[1] ?? '';
     this.index += out[0].length;
     return v;
   }

@@ -39,11 +39,15 @@ export const ifCheck = (raw: unknown, truthy: () => string, falsey?: () => strin
   return (raw ? truthy() : falsey?.()) || '';
 };
 
-export const loop = (raw: unknown, cb: (each: unknown) => string, empty?: () => string) => {
+export const loop = <X>(
+  raw: Iterable<X> | undefined,
+  cb: (each: X) => string,
+  empty?: () => string,
+) => {
   const parts: string[] = [];
 
-  if (raw && (raw as any)[Symbol.iterator]) {
-    for (const x of raw as Iterable<any>) {
+  if (raw && raw[Symbol.iterator]) {
+    for (const x of raw) {
       parts.push(cb(x));
     }
   }

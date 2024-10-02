@@ -10,16 +10,19 @@ const out = buildTemplate(fs.readFileSync('templates/page.html', 'utf-8'));
 fs.mkdirSync('tmp', { recursive: true });
 fs.writeFileSync(
   'tmp/templates.ts',
-  `${importStr}\nexport const fn = (context) => ${out.template};`,
+  `${importStr}
+export type ContextType = ${out.typeString};
+export const fn = (context: ContextType) => ${out.template};`,
 );
 
 const { fn } = await import('./tmp/templates.ts');
 
 console.info(
   fn({
+    something: { has: { a: { prop: 'zing' } } },
     disabled: false,
     content: ['Hello <there>', '...2'],
     emoji: 'butt',
-    loopable: '',
+    loopable: [{ bar: 1 }, { bar: 2 }],
   }).toString(),
 );

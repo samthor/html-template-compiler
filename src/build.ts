@@ -1,4 +1,6 @@
+import { escapeKey, validateVar } from './lib/escape.ts';
 import { HTMLCompiler } from './lib/html-compiler.ts';
+import { TypeScope } from './lib/scope.ts';
 
 /**
  * Builds a template literal from the passed HTML source. May throw if the source is invalid.
@@ -16,19 +18,7 @@ export function buildTemplate(raw: string) {
     }
   }
 
-  const propsRequired = new Set<string>();
-  const propsOptional = new Set<string>();
-
-  const recordProp = (name: string, required?: boolean) => {
-    const [left] = name.split('.');
-    if (left.startsWith('_')) {
-      // ignore
-    } else if (required) {
-      propsRequired.add(left);
-    } else {
-      propsOptional.add(left);
-    }
-  };
+  const ts = new TypeScope();
 
   const parts = c.allParts();
   const inner = parts
@@ -38,17 +28,21 @@ export function buildTemplate(raw: string) {
       }
 
       const c = (name: string) => {
-        if (!/[0-9a-zA-Z_]/.test(name[0])) {
-          throw new Error(`invalid context name: ${name}`);
-        }
-
-        if (name.startsWith('_')) {
-          return name;
-        }
-
-        recordProp(name);
+        ts.record(name);
         const parts = name.split('.');
-        return `(context as any)` + parts.map((part) => `[${JSON.stringify(part)}]`).join('?.');
+
+        if (!ts.isLocal(parts[0])) {
+          parts.unshift('context');
+        }
+
+        return parts
+          .map((part, index) => {
+            if (index === 0) {
+              return part;
+            }
+            return escapeKey(part, true);
+          })
+          .join('?.');
       };
 
       switch (part.mode) {
@@ -69,7 +63,7 @@ export function buildTemplate(raw: string) {
                 if (!(index % 2)) {
                   return subpart;
                 }
-                recordProp(subpart, true); // extra because we MUST be required
+                ts.record(subpart); // TODO: maybe "required"?
                 return `\${ifDefined(${c(subpart)})}`;
               })
               .join('') +
@@ -81,16 +75,25 @@ export function buildTemplate(raw: string) {
 
         case 'logic-conditional': {
           const invert = part.invert ? '!' : '';
+          ts.nestEmpty();
           return `\${ifCheck(${invert}${c(part.render)}, () => \``;
         }
 
         case 'logic-loop':
-          return `\${loop(${c(part.render)}, (_${part.use}) => \``;
+          if (part.use === 'context') {
+            throw new Error(`cannot nest value "context", used internally`);
+          }
+          validateVar(part.use);
+          ts.nestIterable(part.render, part.use);
+          return `\${loop(${c(part.render)}, (${part.use}) => \``;
 
         case 'logic-else':
+          ts.pop();
+          ts.nestEmpty();
           return `\`, () => \``;
 
         case 'logic-close':
+          ts.pop();
           return '`)}';
 
         default:
@@ -99,26 +102,6 @@ export function buildTemplate(raw: string) {
     })
     .join('');
 
-  const stringProps = (i: Iterable<string>) => {
-    return [...i].map((s) => JSON.stringify(s)).join(' | ');
-  };
-  const typeParts: string[] = [];
-
-  // make props required if optional
-  for (const required of propsRequired) {
-    propsOptional.delete(required);
-  }
-
-  if (propsRequired.size) {
-    typeParts.push(`Record<${stringProps(propsRequired)}, unknown>`);
-  }
-  if (propsOptional.size) {
-    typeParts.push(`Partial<Record<${stringProps(propsOptional)}, unknown>>`);
-  }
-  if (!typeParts.length) {
-    typeParts.push(`Record<never, never>`);
-  }
-  const typeString = typeParts.join(' & ');
-
+  const typeString = ts.generateType();
   return { template: '`' + inner + '`', typeString };
 }

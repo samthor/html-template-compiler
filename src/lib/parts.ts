@@ -111,8 +111,8 @@ export function splitForParts(raw: string, mode: 'text' | 'comment'): PartArray 
       }
 
       case '>': {
-        const [check, use = ''] = render.substring(1).trim().split(/\s+/);
-        out.push({ mode: 'logic-loop', render: check, use });
+        const [check, use] = render.substring(1).trim().split(/\s+/);
+        out.push({ mode: 'logic-loop', render: check, use: use || '_' });
         continue;
       }
 
