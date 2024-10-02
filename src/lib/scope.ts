@@ -1,18 +1,18 @@
 import { escapeKey } from './escape.ts';
 
-export const iterableSymbol = Symbol('iterable');
+const iterableSymbol = Symbol('iterable');
+const requiredSymbol = Symbol('required');
+const nestSymbol = Symbol('nest');
 
 export class TypeScope {
   private layout: Record<string | symbol, any> = {}; // le sigh
   private stack: (() => void)[] = [];
-  private local: Record<string, number> = {};
 
   isLocal(name: string) {
-    return Boolean(this.local[name]);
+    return nestSymbol in this.layout[name];
   }
 
-  record(name: string) {
-    // TODO: look up redirs
+  record(name: string, required?: boolean) {
     const parts = name.split('.');
 
     let curr = this.layout;
@@ -25,6 +25,10 @@ export class TypeScope {
         curr = next;
       } else {
         curr = curr[p];
+      }
+
+      if (required) {
+        curr[requiredSymbol] = true;
       }
     }
 
@@ -42,21 +46,19 @@ export class TypeScope {
 
     const node = this.record(name);
     node[iterableSymbol] ??= {};
+    const typeOfIterable = node[iterableSymbol];
 
     const prev = this.layout[as];
 
-    this.layout[as] = node[iterableSymbol];
-    this.local[as] = (this.local[as] || 0) + 1;
+    typeOfIterable[nestSymbol] = true;
+    this.layout[as] = typeOfIterable;
 
     const cleanup = () => {
+      delete typeOfIterable[nestSymbol];
       if (prev) {
         this.layout[as] = prev;
       } else {
         delete this.layout[as];
-      }
-      this.local[as]--;
-      if (this.local[as] === 0) {
-        delete this.local[as];
       }
     };
     this.stack.push(cleanup);
@@ -82,7 +84,13 @@ export class TypeScope {
 
     const parts = keys.map((key): string => {
       const int = this.internalGenerateType(node[key], ni);
-      return `${ni}${escapeKey(key)}?: ${int};\n`;
+
+      let qualifier = '?';
+      if (node[key]?.[requiredSymbol]) {
+        qualifier = '';
+      }
+
+      return `${ni}${escapeKey(key)}${qualifier}: ${int};\n`;
     });
 
     const iterType = node[iterableSymbol];

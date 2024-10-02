@@ -63,7 +63,7 @@ export function buildTemplate(raw: string) {
                 if (!(index % 2)) {
                   return subpart;
                 }
-                ts.record(subpart); // TODO: maybe "required"?
+                ts.record(subpart, true);
                 return `\${ifDefined(${c(subpart)})}`;
               })
               .join('') +

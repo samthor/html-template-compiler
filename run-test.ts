@@ -19,7 +19,8 @@ const { fn } = await import('./tmp/templates.ts');
 
 console.info(
   fn({
-    something: { has: { a: { prop: 'zing' } } },
+    // something: { has: { a: { prop: 'zing' } } },
+    bob: { there: 1 },
     disabled: false,
     content: ['Hello <there>', '...2'],
     emoji: 'butt',
