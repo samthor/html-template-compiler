@@ -1,9 +1,23 @@
-import { coalesceParts, oddSplitForParts, splitForParts, type PartArray } from './parts.ts';
+import { consumeBraceValue } from './brace.ts';
+import {
+  coalesceParts,
+  oddSplitForParts,
+  splitForParts,
+  type Part,
+  type PartArray,
+} from './parts.ts';
 
 const interestingRe = /\<[\/\w!]/g; // not sticky, goes over content
 const tagNameRe = /([^\s>]*)/gy;
 const attrRe = /\s*([^\s/>=]*)(=|)/gy;
 const tagSuffixRe = /\s*\/?>/gy;
+
+export type TagDef = {
+  name: string;
+  attrs: Record<string, string | true>;
+  isClose: boolean;
+  selfClosing: boolean;
+};
 
 export class HTMLCompiler {
   private index: number = 0;
@@ -68,7 +82,8 @@ export class HTMLCompiler {
     const tagName = tagNameRe.exec(this.src)![0];
     if (tagName.endsWith('/') && this.src[this.index + tagName.length] === '>') {
       // bail early, "<tag/>"
-      this.createTag(tagName.substring(0, tagName.length - 1), { isClose, selfClosing: true });
+      const name = tagName.substring(0, tagName.length - 1);
+      this.createTag({ name, attrs: {}, isClose, selfClosing: true });
       this.index += tagName.length + 1;
       return;
     }
@@ -107,7 +122,7 @@ export class HTMLCompiler {
       throw new Error(`bad html, can't match tag suffix`);
     }
     const selfClosing = suffix[0].includes('/');
-    this.createTag(tagName, { attrs, isClose, selfClosing });
+    this.createTag({ name: tagName, attrs, isClose, selfClosing });
     this.index += suffix[0].length;
   }
 
@@ -134,12 +149,13 @@ export class HTMLCompiler {
    */
   private eatAttributeValue(): string {
     let re: RegExp;
-
     const start = this.src[this.index];
 
     if (start === '{' && this.src[this.index + 1] === '{') {
       // this allows `foo={{bar}}` _without_ quotes
-      re = /({{.*?}})/gy;
+      const b = this.consumeBraceValue();
+      this.index = b.end;
+      return `{{${b.inner}}}`; // we're just sanitizing this
     } else if (start === '"') {
       // match everything within quotes (non-aggressively)
       // TODO: this will barf on `foo="{{bar + "zing"}}"`
@@ -159,18 +175,51 @@ export class HTMLCompiler {
     return v;
   }
 
+  /**
+   * Map unknown "inner" brace-bounded parts.
+   */
+  innerMapper(inner: string): Part | Part[] | void {
+    switch (inner[0]) {
+      case '~': {
+        let v;
+        let invert = false;
+        if (inner[1] === '!') {
+          v = inner.substring(2);
+          invert = true;
+        } else {
+          v = inner.substring(1);
+        }
+
+        return { mode: 'logic-conditional', invert, inner: v.trim() };
+      }
+
+      case '>': {
+        const [check, use] = inner.substring(1).trim().split(/\s+/);
+        return { mode: 'logic-loop', inner: check, use: use || '_' };
+      }
+
+      case '|':
+        return { mode: 'logic-else' };
+
+      case '<':
+        return { mode: 'logic-close' };
+    }
+  }
+
   private createComment(s: string) {
-    this.output.push(...splitForParts(s, 'comment'));
+    this.output.push(...splitForParts(s, 'comment', this.innerMapper));
   }
 
   private createText(s: string) {
-    this.output.push(...splitForParts(s, 'text'));
+    this.output.push(...splitForParts(s, 'html', this.innerMapper));
   }
 
-  private createTag(
-    tagName: string,
-    arg: { attrs?: Record<string, string | true>; isClose: boolean; selfClosing: boolean },
-  ) {
+  /**
+   * Returns a custom part for this tag. Intended for overrides.
+   */
+  partForTag(tag: TagDef): Part | Part[] | void {}
+
+  private createTag(tag: TagDef) {
     // console.info('TAG:', {
     //   tagName,
     //   attrs: arg.attrs,
@@ -180,17 +229,30 @@ export class HTMLCompiler {
 
     // TODO: look for special tags (e.g., "hc:if", "hc:for" ...)
 
-    // rebuild output
-    this.output.push(`<${arg.isClose ? '/' : ''}${tagName}`);
+    const p = this.partForTag(tag);
+    if (p) {
+      this.output.push(...[p].flat());
+      return;
+    }
 
-    if (arg.attrs && Object.keys(arg.attrs).length) {
-      for (const [key, value] of Object.entries(arg.attrs)) {
-        const out = this.internalRenderKeyValue(key, value);
-        this.output.push(...out);
+    // rebuild output
+    this.output.push({ mode: 'raw', raw: `<${tag.isClose ? '/' : ''}${tag.name}` });
+
+    for (const key in tag.attrs) {
+      const out = this.internalRenderKeyValue(key, tag.attrs[key]);
+      if (out.length) {
+        this.output.push({ mode: 'raw', raw: ' ' }, ...out);
       }
     }
 
-    this.output.push(arg.selfClosing ? ' />' : '>');
+    this.output.push({ mode: 'raw', raw: tag.selfClosing ? ' />' : '>' });
+  }
+
+  /**
+   * Consumes a braced value at the given cursor.
+   */
+  private consumeBraceValue() {
+    return consumeBraceValue(this.src, this.index);
   }
 
   internalRenderKeyValue(key: string, value: string | true): PartArray {
@@ -198,15 +260,16 @@ export class HTMLCompiler {
     if (key.startsWith('?')) {
       key = key.substring(1);
 
-      if (value === true) {
-        return []; // no value for optional attribute?
+      if (value === true || !value) {
+        return []; // passed `?foo` without value? - never true
       }
 
       const s = oddSplitForParts(value);
-      if (s.length !== 3) {
-        return [key];
+      if (s.length !== 3 || s[0] || s[2]) {
+        // if we're not `?foo="{{bar}}"` literally then this is always true!
+        return [{ mode: 'raw', raw: key }];
       }
-      return [{ mode: 'attr-boolean', attr: key, render: s[1] }];
+      return [{ mode: 'attr-boolean', attr: key, inner: s[1] }];
     }
 
     // ":content" shorthand
@@ -215,11 +278,12 @@ export class HTMLCompiler {
       if (!key) {
         throw new Error(`must bind :-value`);
       }
-      return [{ mode: 'attr-render', attr: key, render: key }];
+      return [{ mode: 'attr-render', attr: key, inner: key }];
     }
 
+    // just `<bar foo />`
     if (value === true) {
-      return [' ', key];
+      return [{ mode: 'raw', raw: key }];
     }
 
     const s = oddSplitForParts(value);
@@ -228,14 +292,17 @@ export class HTMLCompiler {
     }
     if (s.length === 1) {
       // no renderable parts
-      return [` ${key}="${s[0]}"`];
+      return [{ mode: 'raw', raw: `${key}="${s[0]}"` }];
     }
     if (s.length === 3 && !s[0] && !s[2]) {
       // special maybe-renderable
-      return [{ mode: 'attr-render', attr: key, render: s[1] }];
+      return [{ mode: 'attr-render', attr: key, inner: s[1] }];
     }
 
     // we MUST have parts now
-    return [` ${key}=`, { mode: 'attr', parts: s }];
+    return [
+      { mode: 'raw', raw: `${key}=` },
+      { mode: 'attr', parts: s },
+    ];
   }
 }

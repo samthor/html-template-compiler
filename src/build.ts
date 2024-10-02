@@ -1,5 +1,6 @@
 import { escapeKey, validateVar } from './lib/escape.ts';
 import { HTMLCompiler } from './lib/html-compiler.ts';
+import type { Part } from './lib/parts.ts';
 import { TypeScope } from './lib/scope.ts';
 
 /**
@@ -9,99 +10,95 @@ import { TypeScope } from './lib/scope.ts';
  * HTML.
  */
 export function buildTemplate(raw: string) {
-  const c = new HTMLCompiler(raw);
-
-  for (;;) {
-    const more = c.consumeTopLevel();
-    if (!more) {
-      break;
-    }
+  const compiler = new HTMLCompiler(raw);
+  while (compiler.consumeTopLevel()) {
+    // keep going
   }
 
   const ts = new TypeScope();
+  const c = (name: string) => {
+    ts.record(name);
+    const parts = name.split('.');
 
-  const parts = c.allParts();
-  const inner = parts
-    .map((part) => {
-      if (typeof part === 'string') {
-        return part.replaceAll('`', '\\`');
+    if (!ts.isLocal(parts[0])) {
+      parts.unshift('context');
+    }
+
+    return parts
+      .map((part, index) => {
+        if (index === 0) {
+          return part;
+        }
+        return escapeKey(part, true);
+      })
+      .join('?.');
+  };
+
+  const renderPart = (part: Part): string => {
+    switch (part.mode) {
+      case 'raw':
+        return part.raw;
+
+      case 'comment':
+        return `\${ifDefined(${c(part.inner)})}`;
+
+      case 'html':
+        return `\${renderBody(${c(part.inner)})}`;
+
+      case 'attr-boolean':
+        return `\${${c(part.inner)} ? ' ${part.attr}' : ''}`;
+
+      case 'attr':
+        return (
+          '"' +
+          part.parts
+            .map((subpart, index) => {
+              if (!(index % 2)) {
+                return subpart;
+              }
+              ts.record(subpart, true);
+              return `\${ifDefined(${c(subpart)})}`;
+            })
+            .join('') +
+          '"'
+        );
+
+      case 'attr-render':
+        return `\${ifDefined(${c(part.inner)}, (v) => \` ${part.attr}="\${v}"\`)}`;
+
+      case 'logic-conditional': {
+        const invert = part.invert ? '!' : '';
+        ts.nestEmpty();
+        return `\${ifCheck(${invert}${c(part.inner)}, () => \``;
       }
 
-      const c = (name: string) => {
-        ts.record(name);
-        const parts = name.split('.');
-
-        if (!ts.isLocal(parts[0])) {
-          parts.unshift('context');
+      case 'logic-loop':
+        if (part.use === 'context') {
+          throw new Error(`cannot nest value "context", used internally`);
         }
+        validateVar(part.use);
+        ts.nestIterable(part.inner, part.use);
+        return `\${loop(${c(part.inner)}, (${part.use}) => \``;
 
-        return parts
-          .map((part, index) => {
-            if (index === 0) {
-              return part;
-            }
-            return escapeKey(part, true);
-          })
-          .join('?.');
-      };
+      case 'logic-else':
+        ts.pop();
+        ts.nestEmpty();
+        return `\`, () => \``;
 
-      switch (part.mode) {
-        case 'comment':
-          return `\${ifDefined(${c(part.render)})}`;
+      case 'logic-close':
+        ts.pop();
+        return '`)}';
 
-        case 'html':
-          return `\${renderBody(${c(part.render)})}`;
+      default:
+        part satisfies never;
+        throw 'Should never happen';
+    }
+  };
 
-        case 'attr-boolean':
-          return `\${${c(part.render)} ? ' ${part.attr}' : ''}`;
-
-        case 'attr':
-          return (
-            '"' +
-            part.parts
-              .map((subpart, index) => {
-                if (!(index % 2)) {
-                  return subpart;
-                }
-                ts.record(subpart, true);
-                return `\${ifDefined(${c(subpart)})}`;
-              })
-              .join('') +
-            '"'
-          );
-
-        case 'attr-render':
-          return `\${ifDefined(${c(part.render)}, (v) => \` ${part.attr}="\${v}"\`)}`;
-
-        case 'logic-conditional': {
-          const invert = part.invert ? '!' : '';
-          ts.nestEmpty();
-          return `\${ifCheck(${invert}${c(part.render)}, () => \``;
-        }
-
-        case 'logic-loop':
-          if (part.use === 'context') {
-            throw new Error(`cannot nest value "context", used internally`);
-          }
-          validateVar(part.use);
-          ts.nestIterable(part.render, part.use);
-          return `\${loop(${c(part.render)}, (${part.use}) => \``;
-
-        case 'logic-else':
-          ts.pop();
-          ts.nestEmpty();
-          return `\`, () => \``;
-
-        case 'logic-close':
-          ts.pop();
-          return '`)}';
-
-        default:
-          part satisfies never;
-      }
-    })
+  const inner = compiler
+    .allParts()
+    .map((part) => renderPart(part))
     .join('');
-
   const typeString = ts.generateType();
   return { template: '`' + inner + '`', typeString, anyRequired: ts.anyRequired() };
 }

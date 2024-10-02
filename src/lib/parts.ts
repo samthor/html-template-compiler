@@ -1,46 +1,79 @@
+import { consumeBraceValue } from './brace.ts';
+import { isVar } from './escape.ts';
+
 export type Part =
   | {
+      /**
+       * Raw, unmediated output.
+       */
+      mode: 'raw';
+      raw: string;
+    }
+  | {
+      /**
+       * Renders some inner value within HTML or a comment.
+       */
       mode: 'html' | 'comment';
-      render: string;
+      inner: string;
     }
   | {
       mode: 'attr';
       parts: string[]; // always odd: e.g., string,part,string,part,string
     }
   | {
+      /**
+       * Renders an attribute and its value presuming it is not `null` or `undefined`.
+       */
       mode: 'attr-render';
       attr: string;
-      render: string;
+      inner: string;
     }
   | {
+      /**
+       * Renders a boolean attribute if the inner value is truthy.
+       */
       mode: 'attr-boolean';
       attr: string;
-      render: string;
+      inner: string;
     }
   | {
+      /**
+       * If conditional. Checks inner is truthy, with optional inversion.
+       */
       mode: 'logic-conditional';
-      render: string;
       invert: boolean;
+      inner: string;
     }
   | {
+      /**
+       * Loop over ther inner value, creating a variable defined in "use".
+       */
       mode: 'logic-loop';
-      render: string;
       use: string;
+      inner: string;
     }
   | {
+      /**
+       * Else for a conditional or loop (runs if no values rendered).
+       */
       mode: 'logic-else';
     }
   | {
+      /**
+       * Closes a conditional or loop, or its respective else branch.
+       */
       mode: 'logic-close';
     };
 
-export type PartArray = (string | Part)[];
+export type PartArray = Part[];
 
-const partRe = /{{(.*?)}}/g;
+const startPartRe = /\{\{/g;
 
 /**
  * Split a string containing "parts" into an odd number of strings. For example:
  *
+ * - "" => [""]
+ * - "Nothing" => ["Nothing"]
  * - "{{foo}}" => ["", "foo", ""]
  * - "Hello {{attr}}" => ["Hello ", "attr", ""]
  * - "What {{is}} up {{name}}" => ["What ", "is", " up ", "name", ""]
@@ -52,81 +85,57 @@ export function oddSplitForParts(raw: string): string[] {
   let index = 0;
 
   for (;;) {
-    partRe.lastIndex = index;
-    const part = partRe.exec(raw);
-    if (!part) {
+    startPartRe.lastIndex = index;
+    const startPart = startPartRe.exec(raw);
+    if (!startPart) {
       out.push(raw.substring(index));
       return out;
     }
 
-    out.push(raw.substring(index, part.index));
-    out.push(part[1].trim());
-    index = part.index + part[0].length;
+    const b = consumeBraceValue(raw, startPart.index);
+    out.push(raw.substring(index, b.start));
+    out.push(b.inner);
+    index = b.end;
   }
 }
 
-export function splitForParts(raw: string, mode: 'text' | 'comment'): PartArray {
+export function splitForParts(
+  raw: string,
+  mode: 'html' | 'comment',
+  mapper: (inner: string) => Part | Part[] | void,
+): PartArray {
   const out: PartArray = [];
   let index = 0;
 
   for (;;) {
-    partRe.lastIndex = index;
-    const part = partRe.exec(raw);
-    if (!part) {
+    startPartRe.lastIndex = index;
+    const startPart = startPartRe.exec(raw);
+    if (!startPart) {
       if (index !== raw.length) {
-        out.push(raw.substring(index));
+        out.push({ mode: 'raw', raw: raw.substring(index) });
       }
       return out;
     }
 
-    if (part.index !== index) {
-      out.push(raw.substring(index, part.index));
+    if (startPart.index !== index) {
+      out.push({ mode: 'raw', raw: raw.substring(index, startPart.index) });
     }
-    index = part.index + part[0].length;
 
-    const render = part[1].trim();
+    const b = consumeBraceValue(raw, startPart.index);
+    const inner = b.inner;
+    index = b.end;
 
-    // TODO: if render starts with custom code...
-
-    if (/[0-9a-zA-Z_]/.test(render[0])) {
-      // this is "{{stuff}}" with relatively boring contents
-      const actualMode = mode === 'text' ? 'html' : mode;
-      out.push({ mode: actualMode, render });
+    // this is "{{stuff}}" with relatively boring contents
+    if (isVar(inner)) {
+      out.push({ mode, inner: inner });
       continue;
     }
 
-    switch (render[0]) {
-      case '~': {
-        let v;
-        let invert = false;
-        if (render[1] === '!') {
-          v = render.substring(2);
-          invert = true;
-        } else {
-          v = render.substring(1);
-        }
-
-        out.push({ mode: 'logic-conditional', invert, render: v.trim() });
-        continue;
-      }
-
-      case '>': {
-        const [check, use] = render.substring(1).trim().split(/\s+/);
-        out.push({ mode: 'logic-loop', render: check, use: use || '_' });
-        continue;
-      }
-
-      case '|':
-        out.push({ mode: 'logic-else' });
-        continue;
-
-      case '<':
-        out.push({ mode: 'logic-close' });
-        continue;
-
-      default:
-        throw new Error(`unknown code: ${render}`);
+    const p = mapper(inner);
+    if (!p) {
+      throw new Error(`couldn't map: ${JSON.stringify(inner)}`);
     }
+    out.push(...[p].flat());
   }
 }
 
@@ -142,14 +151,14 @@ export function coalesceParts(parts: PartArray): PartArray {
   const emit = () => {
     const p = strings.join('');
     if (p) {
-      out.push(p);
+      out.push({ mode: 'raw', raw: p });
     }
     strings = [];
   };
 
   for (const p of parts) {
-    if (typeof p === 'string') {
-      strings.push(p);
+    if (p.mode === 'raw') {
+      strings.push(p.raw);
     } else {
       emit();
       out.push(p);

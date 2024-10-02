@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { buildTemplate } from './src/build.ts';
 import * as fs from 'node:fs';
 import { getLibNames } from './src/scriptinfo.ts';

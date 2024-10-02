@@ -17,3 +17,15 @@ export function validateVar(name: string) {
 
   return name;
 }
+
+export function isVar(name: string) {
+  if (!/^[a-zA-Z$_]/g.test(name)) {
+    return false;
+  }
+
+  if (/[^\w\.$_]/g.test(name)) {
+    return false;
+  }
+
+  return true;
+}
