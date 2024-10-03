@@ -51,8 +51,13 @@ export class TypeScope {
 
     const node = this.record(name);
     node[iterableSymbol] ??= {};
-    const typeOfIterable = node[iterableSymbol];
 
+    if (!as) {
+      this.stack.push(() => {});
+      return;
+    }
+
+    const typeOfIterable = node[iterableSymbol];
     const prev = this.layout[as];
 
     typeOfIterable[nestSymbol] = true;

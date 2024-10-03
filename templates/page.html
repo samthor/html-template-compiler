@@ -7,9 +7,15 @@
   </head>
   <body ?disabled="{{disabled}}" longProp="{{bob.there}}">
     <butt />
-    {{something.has.a.prop}} {{content}} {{~emoji}} There is an emoji here: {{emoji}} {{<}}
-    {{>loopable foo}} Foo.bar: {{foo.bar}}<br />
-    <prop-check name="force {{foo.zing}}" />
-    {{|}} No items available {{<}}
+    {{something.has.a.prop}} {{content}}
+
+    <hc:if i="!emoji">There is NOT an emoji here: {{emoji}}</hc:if>
+    <hc:if i="emoji">There is YES an emoji here: {{emoji}}</hc:if>
+
+    <hc:loop i="loopable" v="foo">
+      Foo.bar: {{foo.bar}}<br />
+      <prop-check name="force {{foo.zing}}" />
+    </hc:loop>
+    <hc:empty i="loopable"> No items available </hc:empty>
   </body>
 </html>

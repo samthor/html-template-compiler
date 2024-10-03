@@ -1,5 +1,5 @@
 import { escapeKey, validateVar } from './lib/escape.ts';
-import { HTMLCompiler } from './lib/html-compiler.ts';
+import { HTMLCompilerTags } from './lib/html-compiler-tags.ts';
 import type { Part } from './lib/parts.ts';
 import { TypeScope } from './lib/scope.ts';
 
@@ -10,7 +10,7 @@ import { TypeScope } from './lib/scope.ts';
  * HTML.
  */
 export function buildTemplate(raw: string) {
-  const compiler = new HTMLCompiler(raw);
+  const compiler = new HTMLCompilerTags(raw);
   while (compiler.consumeTopLevel()) {
     // keep going
   }
@@ -79,6 +79,10 @@ export function buildTemplate(raw: string) {
         validateVar(part.use);
         ts.nestIterable(part.inner, part.use);
         return `\${loop(${c(part.inner)}, (${part.use}) => \``;
+
+      case 'logic-empty-loop':
+        ts.nestIterable(part.inner, '');
+        return `\${eloop(${c(part.inner)}, () => \``;
 
       case 'logic-else':
         ts.pop();

@@ -1,11 +1,5 @@
 import { consumeBraceValue } from './brace.ts';
-import {
-  coalesceParts,
-  oddSplitForParts,
-  splitForParts,
-  type Part,
-  type PartArray,
-} from './parts.ts';
+import { coalesceParts, renderAttrKeyValue, splitForParts, type Part } from './parts.ts';
 
 const interestingRe = /\<[\/\w!]/g; // not sticky, goes over content
 const tagNameRe = /([^\s>]*)/gy;
@@ -21,12 +15,26 @@ export type TagDef = {
 
 export class HTMLCompiler {
   private index: number = 0;
-  private output: PartArray = [];
+  private output: Part[] = [];
 
   constructor(public src: string) {}
 
-  allParts(): PartArray {
-    return coalesceParts(this.output);
+  allParts(): readonly Part[] {
+    return this.output;
+  }
+
+  /**
+   * Push new part(s) into the output. Automatically coalesces any raw text as part of the push.
+   */
+  protected pushParts(parts: Part[] | Part) {
+    if (!Array.isArray(parts)) {
+      parts = [parts];
+    }
+
+    if (parts.at(0)?.mode === 'raw' && this.output.at(-1)?.mode === 'raw') {
+      parts.unshift(this.output.pop()!);
+    }
+    this.output.push(...coalesceParts(parts));
   }
 
   /**
@@ -176,42 +184,16 @@ export class HTMLCompiler {
   }
 
   /**
-   * Map unknown "inner" brace-bounded parts.
+   * Map unknown "inner" brace-bounded parts. Intended for overrides.
    */
-  innerMapper(inner: string): Part | Part[] | void {
-    switch (inner[0]) {
-      case '~': {
-        let v;
-        let invert = false;
-        if (inner[1] === '!') {
-          v = inner.substring(2);
-          invert = true;
-        } else {
-          v = inner.substring(1);
-        }
-
-        return { mode: 'logic-conditional', invert, inner: v.trim() };
-      }
-
-      case '>': {
-        const [check, use] = inner.substring(1).trim().split(/\s+/);
-        return { mode: 'logic-loop', inner: check, use: use || '_' };
-      }
-
-      case '|':
-        return { mode: 'logic-else' };
-
-      case '<':
-        return { mode: 'logic-close' };
-    }
-  }
+  innerMapper(inner: string): Part | Part[] | void {}
 
   private createComment(s: string) {
-    this.output.push(...splitForParts(s, 'comment', this.innerMapper));
+    this.pushParts(splitForParts(s, 'comment', this.innerMapper.bind(this)));
   }
 
   private createText(s: string) {
-    this.output.push(...splitForParts(s, 'html', this.innerMapper));
+    this.pushParts(splitForParts(s, 'html', this.innerMapper.bind(this)));
   }
 
   /**
@@ -231,21 +213,19 @@ export class HTMLCompiler {
 
     const p = this.partForTag(tag);
     if (p) {
-      this.output.push(...[p].flat());
+      this.pushParts(p);
       return;
     }
 
     // rebuild output
-    this.output.push({ mode: 'raw', raw: `<${tag.isClose ? '/' : ''}${tag.name}` });
+    this.pushParts({ mode: 'raw', raw: `<${tag.isClose ? '/' : ''}${tag.name}` });
 
     for (const key in tag.attrs) {
-      const out = this.internalRenderKeyValue(key, tag.attrs[key]);
-      if (out.length) {
-        this.output.push({ mode: 'raw', raw: ' ' }, ...out);
-      }
+      const out = renderAttrKeyValue(key, tag.attrs[key]);
+      this.pushParts(out);
     }
 
-    this.output.push({ mode: 'raw', raw: tag.selfClosing ? ' />' : '>' });
+    this.pushParts({ mode: 'raw', raw: tag.selfClosing ? ' />' : '>' });
   }
 
   /**
@@ -253,56 +233,5 @@ export class HTMLCompiler {
    */
   private consumeBraceValue() {
     return consumeBraceValue(this.src, this.index);
-  }
-
-  internalRenderKeyValue(key: string, value: string | true): PartArray {
-    // optional prop shorthand
-    if (key.startsWith('?')) {
-      key = key.substring(1);
-
-      if (value === true || !value) {
-        return []; // passed `?foo` without value? - never true
-      }
-
-      const s = oddSplitForParts(value);
-      if (s.length !== 3 || s[0] || s[2]) {
-        // if we're not `?foo="{{bar}}"` literally then this is always true!
-        return [{ mode: 'raw', raw: key }];
-      }
-      return [{ mode: 'attr-boolean', attr: key, inner: s[1] }];
-    }
-
-    // ":content" shorthand
-    if (key.startsWith(':')) {
-      key = key.substring(1);
-      if (!key) {
-        throw new Error(`must bind :-value`);
-      }
-      return [{ mode: 'attr-render', attr: key, inner: key }];
-    }
-
-    // just `<bar foo />`
-    if (value === true) {
-      return [{ mode: 'raw', raw: key }];
-    }
-
-    const s = oddSplitForParts(value);
-    if (!(s.length % 2)) {
-      throw new Error(`internal: must be odd split: ${s}`);
-    }
-    if (s.length === 1) {
-      // no renderable parts
-      return [{ mode: 'raw', raw: `${key}="${s[0]}"` }];
-    }
-    if (s.length === 3 && !s[0] && !s[2]) {
-      // special maybe-renderable
-      return [{ mode: 'attr-render', attr: key, inner: s[1] }];
-    }
-
-    // we MUST have parts now
-    return [
-      { mode: 'raw', raw: `${key}=` },
-      { mode: 'attr', parts: s },
-    ];
   }
 }

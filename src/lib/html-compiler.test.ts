@@ -9,7 +9,7 @@ test('basic tag', () => {
   assert.deepStrictEqual(c.allParts(), [
     {
       mode: 'raw',
-      raw: '<hello ',
+      raw: '<hello',
     },
     {
       mode: 'attr-render',

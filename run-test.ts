@@ -23,9 +23,9 @@ console.info(
   fn({
     // something: { has: { a: { prop: 'zing' } } },
     bob: { there: 1 },
-    disabled: false,
+    disabled: 1,
     content: ['Hello <there>', '...2'],
-    emoji: 'butt',
-    loopable: [{ zing: 1 }, { bar: 2, zing: 'hello' }],
+    emoji: 0,
+    // loopable: [{ zing: 1 }, { bar: 2, zing: 'hello' }],
   }).toString(),
 );

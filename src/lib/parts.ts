@@ -54,6 +54,13 @@ export type Part =
     }
   | {
       /**
+       * If the given iterable is empty and has no values, run a branch.
+       */
+      mode: 'logic-empty-loop';
+      inner: string;
+    }
+  | {
+      /**
        * Else for a conditional or loop (runs if no values rendered).
        */
       mode: 'logic-else';
@@ -64,8 +71,6 @@ export type Part =
        */
       mode: 'logic-close';
     };
-
-export type PartArray = Part[];
 
 const startPartRe = /\{\{/g;
 
@@ -103,8 +108,8 @@ export function splitForParts(
   raw: string,
   mode: 'html' | 'comment',
   mapper: (inner: string) => Part | Part[] | void,
-): PartArray {
-  const out: PartArray = [];
+): Part[] {
+  const out: Part[] = [];
   let index = 0;
 
   for (;;) {
@@ -145,8 +150,8 @@ export function splitForParts(
  *
  * Useful for a parser which might aggressively generate lots of strings.
  */
-export function coalesceParts(parts: PartArray): PartArray {
-  const out: PartArray = [];
+export function coalesceParts(parts: Part[]): Part[] {
+  const out: Part[] = [];
   let strings: string[] = [];
   const emit = () => {
     const p = strings.join('');
@@ -167,4 +172,58 @@ export function coalesceParts(parts: PartArray): PartArray {
 
   emit();
   return out;
+}
+
+/**
+ * Render a key/value pair that appears inside a tag. This must return leading whitespace if raw.
+ */
+export function renderAttrKeyValue(key: string, value: string | true): Part[] {
+  // optional prop shorthand
+  if (key.startsWith('?')) {
+    key = key.substring(1);
+
+    if (value === true || !value) {
+      return []; // passed `?foo` without value? - never true
+    }
+
+    const s = oddSplitForParts(value);
+    if (s.length !== 3 || s[0] || s[2]) {
+      // if we're not `?foo="{{bar}}"` literally then this is always true!
+      return [{ mode: 'raw', raw: key }];
+    }
+    return [{ mode: 'attr-boolean', attr: key, inner: s[1] }];
+  }
+
+  // ":content" shorthand
+  if (key.startsWith(':')) {
+    key = key.substring(1);
+    if (!key) {
+      throw new Error(`must bind :-value`);
+    }
+    return [{ mode: 'attr-render', attr: key, inner: key }];
+  }
+
+  // just `<bar foo />`
+  if (value === true) {
+    return [{ mode: 'raw', raw: ` ${key}` }];
+  }
+
+  const s = oddSplitForParts(value);
+  if (!(s.length % 2)) {
+    throw new Error(`internal: must be odd split: ${s}`);
+  }
+  if (s.length === 1) {
+    // no renderable parts
+    return [{ mode: 'raw', raw: ` ${key}="${s[0]}"` }];
+  }
+  if (s.length === 3 && !s[0] && !s[2]) {
+    // special maybe-renderable
+    return [{ mode: 'attr-render', attr: key, inner: s[1] }];
+  }
+
+  // we MUST have parts now
+  return [
+    { mode: 'raw', raw: ` ${key}=` },
+    { mode: 'attr', parts: s },
+  ];
 }

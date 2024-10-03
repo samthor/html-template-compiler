@@ -7,7 +7,7 @@ export function escapeKey(s: string, propUse?: boolean) {
 }
 
 export function validateVar(name: string) {
-  if (!/^[a-zA-Z$_]/g.test(name)) {
+  if (!name || !/^[a-zA-Z$_]/g.test(name)) {
     throw new Error(`var starts with invalid character`);
   }
 

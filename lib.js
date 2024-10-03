@@ -33,9 +33,17 @@ var ifCheck = (raw, truthy, falsey) => {
   }
   return (raw ? truthy() : falsey?.()) || "";
 };
+var eloop = (raw, empty) => {
+  if (raw?.[Symbol.iterator]) {
+    for (const x of raw) {
+      return "";
+    }
+  }
+  return empty();
+};
 var loop = (raw, cb, empty) => {
   const parts = [];
-  if (raw && raw[Symbol.iterator]) {
+  if (raw?.[Symbol.iterator]) {
     for (const x of raw) {
       parts.push(cb(x));
     }
@@ -62,6 +70,7 @@ var renderBody = (raw) => {
   return escape(String(raw));
 };
 export {
+  eloop,
   escape,
   ifCheck,
   ifDefined,
