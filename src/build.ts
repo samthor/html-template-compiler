@@ -68,8 +68,17 @@ export function buildTemplate(raw: string) {
 
       case 'logic-conditional': {
         const invert = part.invert ? '!' : '';
-        ts.nestEmpty();
-        return `\${ifCheck(${invert}${c(part.inner)}, () => \``;
+
+        let content = c(part.inner);
+        if (part.check === 'iter') {
+          // see if iterable exists and is non-empty
+          content = `iterAsBoolean(${content})`;
+          ts.nestIterable(part.inner, '');
+        } else {
+          ts.nestEmpty();
+        }
+
+        return `\${ifCheck(${invert}${content}, () => \``;
       }
 
       case 'logic-loop':
@@ -79,10 +88,6 @@ export function buildTemplate(raw: string) {
         validateVar(part.use);
         ts.nestIterable(part.inner, part.use);
         return `\${loop(${c(part.inner)}, (${part.use}) => \``;
-
-      case 'logic-empty-loop':
-        ts.nestIterable(part.inner, '');
-        return `\${eloop(${c(part.inner)}, () => \``;
 
       case 'logic-else':
         ts.pop();

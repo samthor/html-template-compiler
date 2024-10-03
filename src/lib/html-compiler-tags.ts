@@ -27,11 +27,11 @@ export class HTMLCompilerTags extends HTMLCompiler {
           validate();
           return { mode: 'logic-close' };
         }
-        validate('i', 'v');
+        validate('iter', 'v');
 
-        const inner = tag.attrs['i'];
+        const inner = tag.attrs['iter'];
         if (typeof inner !== 'string') {
-          throw new Error(`hc:for needs i=... was=${inner}`);
+          throw new Error(`hc:for needs iter=... was=${inner}`);
         }
 
         let varName = tag.attrs['v'];
@@ -40,21 +40,6 @@ export class HTMLCompilerTags extends HTMLCompiler {
         }
 
         return { mode: 'logic-loop', inner, use: varName };
-      }
-
-      case 'hc:empty': {
-        if (!tag.selfClosing && tag.isClose) {
-          validate();
-          return { mode: 'logic-close' };
-        }
-        validate('i');
-
-        const inner = tag.attrs['i'];
-        if (typeof inner !== 'string') {
-          throw new Error(`hc:empty needs i=... was=${inner}`);
-        }
-
-        return { mode: 'logic-empty-loop', inner };
       }
 
       case 'hc:else': {
@@ -72,20 +57,29 @@ export class HTMLCompilerTags extends HTMLCompiler {
           validate();
           return { mode: 'logic-close' };
         }
-        validate('i');
+        const out: Part = { mode: 'logic-conditional', inner: '', invert: false };
 
-        let inner = tag.attrs['i'];
-        if (typeof inner !== 'string') {
-          throw new Error(`hc:if needs i=... was=${JSON.stringify(tag.attrs)}`);
+        let inner: string | boolean;
+        if ('iter' in tag.attrs) {
+          validate('iter');
+          inner = tag.attrs['iter'];
+          out.check = 'iter';
+        } else {
+          validate('i');
+          inner = tag.attrs['i'];
         }
 
-        let invert = false;
+        if (typeof inner !== 'string') {
+          throw new Error(`hc:if needs string`);
+        }
+
         if (inner.startsWith('!')) {
-          invert = true;
+          out.invert = true;
           inner = inner.substring(1);
         }
+        out.inner = inner;
 
-        return { mode: 'logic-conditional', inner, invert };
+        return out;
       }
     }
 

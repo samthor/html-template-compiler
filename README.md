@@ -47,15 +47,16 @@ You can pass e.g., `!foo` to invert the conditional.
 Or loops:
 
 ```html
-<hc:loop i="foo" v="eachFoo">
+<hc:loop iter="foo" v="eachFoo">
   <div class="each-foo-bar">{{eachFoo.bar}}</div>
 </hc:loop>
-<hc:empty i="foo">
+<hc:if iter="!foo">
+  <!-- Iterates the first item, don't use on generators -->
   <div class="empty">No items available</div>
-</hc:empty>
+</hc:if>
 ```
 
-You can also use `<hc:else />` within a loop to denote the empty block.
+You can also use `<hc:else />` within a loop to denote an empty block.
 
 ## Unsafe
 

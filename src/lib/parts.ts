@@ -43,6 +43,7 @@ export type Part =
       mode: 'logic-conditional';
       invert: boolean;
       inner: string;
+      check?: 'iter'; // if iter, checks if the iterable has any content
     }
   | {
       /**
@@ -50,13 +51,6 @@ export type Part =
        */
       mode: 'logic-loop';
       use: string;
-      inner: string;
-    }
-  | {
-      /**
-       * If the given iterable is empty and has no values, run a branch.
-       */
-      mode: 'logic-empty-loop';
       inner: string;
     }
   | {

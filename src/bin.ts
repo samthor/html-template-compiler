@@ -40,17 +40,8 @@ out.push('\n');
 
 if (opts.values.inline) {
   // embed this package
-  let raw: string;
-
-  try {
-    // deployed ver, nested _original_ source
-    const u = new URL('./src/lib.ts', import.meta.url);
-    raw = fs.readFileSync(u, 'utf-8');
-  } catch (e) {
-    // test local version
-    const u = new URL('./lib.ts', import.meta.url);
-    raw = fs.readFileSync(u, 'utf-8');
-  }
+  const u = new URL('./lib.ts', import.meta.url);
+  let raw = fs.readFileSync(u, 'utf-8');
 
   // TODO: very lazy "non export" version
   raw = raw.replaceAll(/^export /gm, '');

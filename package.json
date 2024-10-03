@@ -7,23 +7,23 @@
   "scripts": {
     "prepublishOnly": "node --run build",
     "build": "node --run build:bin && node --run build:lib",
-    "build:bin": "esbuild --outfile=bin.js --format=esm --platform=node --bundle src/bin.ts",
-    "build:lib": "esbuild --outfile=lib.js --format=esm --bundle src/lib.ts",
+    "build:bin": "esbuild --outfile=dist/bin.js --format=esm --platform=node --bundle src/bin.ts",
+    "build:lib": "esbuild --outfile=dist/lib.js --format=esm --bundle src/lib.ts && cp src/lib.ts dist/lib.ts",
     "test": "node --test **/*.test.ts && node run-test.ts"
   },
   "bin": {
-    "html-template-compiler": "./bin.js"
+    "html-template-compiler": "./dist/bin.js"
   },
-  "types": "./src/lib.ts",
+  "types": "./dist/lib.ts",
   "exports": {
     ".": {
-      "import": "./lib.js",
-      "types": "./src/lib.ts"
+      "import": "./dist/lib.js",
+      "types": "./dist/lib.ts"
     }
   },
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
   "name": "html-template-compiler",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "sideEffects": false
 }

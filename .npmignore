@@ -1,3 +1,5 @@
 templates/
 *test*
 .*
+tmp/
+src/

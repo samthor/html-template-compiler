@@ -8,6 +8,8 @@ const escapeMap: Record<string, string> = {
   "'": '&#39;',
 };
 
+export type MaybeIterable<X = unknown> = { [Symbol.iterator]?(): Iterator<X> };
+
 export const unsafe = (raw: unknown): { toString(): string } => {
   return {
     toString() {
@@ -39,13 +41,13 @@ export const ifCheck = (raw: unknown, truthy: () => string, falsey?: () => strin
   return (raw ? truthy() : falsey?.()) || '';
 };
 
-export const eloop = (raw: Iterable<any> | undefined, empty: () => string) => {
+export const iterAsBoolean = (raw: Iterable<any> | undefined) => {
   if (raw?.[Symbol.iterator]) {
     for (const x of raw) {
-      return '';
+      return true;
     }
   }
-  return empty();
+  return false;
 };
 
 export const loop = <X>(
