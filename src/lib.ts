@@ -41,9 +41,9 @@ export const ifCheck = (raw: unknown, truthy: () => string, falsey?: () => strin
   return (raw ? truthy() : falsey?.()) || '';
 };
 
-export const iterAsBoolean = (raw: Iterable<any> | undefined) => {
+export const iterAsBoolean = (raw: MaybeIterable<any> | undefined) => {
   if (raw?.[Symbol.iterator]) {
-    for (const x of raw) {
+    for (const x of raw as Iterable<any>) {
       return true;
     }
   }
@@ -51,14 +51,14 @@ export const iterAsBoolean = (raw: Iterable<any> | undefined) => {
 };
 
 export const loop = <X>(
-  raw: Iterable<X> | undefined,
+  raw: MaybeIterable<X> | undefined,
   cb: (each: X) => string,
   empty?: () => string,
 ) => {
   const parts: string[] = [];
 
   if (raw?.[Symbol.iterator]) {
-    for (const x of raw) {
+    for (const x of raw as Iterable<X>) {
       parts.push(cb(x));
     }
   }

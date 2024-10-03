@@ -24,6 +24,6 @@
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
   "name": "html-template-compiler",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "sideEffects": false
 }

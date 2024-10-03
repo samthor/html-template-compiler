@@ -85,9 +85,10 @@ export function buildTemplate(raw: string) {
         if (part.use === 'context') {
           throw new Error(`cannot nest value "context", used internally`);
         }
+        const content = c(part.inner); // has to happen before `nestIterable`
         validateVar(part.use);
         ts.nestIterable(part.inner, part.use);
-        return `\${loop(${c(part.inner)}, (${part.use}) => \``;
+        return `\${loop(${content}, (${part.use}) => \``;
 
       case 'logic-else':
         ts.pop();

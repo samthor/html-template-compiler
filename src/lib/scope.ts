@@ -58,13 +58,17 @@ export class TypeScope {
     }
 
     const typeOfIterable = node[iterableSymbol];
-    const prev = this.layout[as];
-
     typeOfIterable[nestSymbol] = true;
+
+    const prev = this.layout[as];
     this.layout[as] = typeOfIterable;
 
     const cleanup = () => {
+      if (this.layout[as] !== typeOfIterable) {
+        throw new Error(`bad cleanup: unexpected value in ${as} pos`);
+      }
       delete typeOfIterable[nestSymbol];
+
       if (prev) {
         this.layout[as] = prev;
       } else {
@@ -108,7 +112,7 @@ export class TypeScope {
     const iterType = node[iterableSymbol];
     if (iterType) {
       parts.push(
-        `${ni}[Symbol.iterator](): Iterator<${this.internalGenerateType(iterType, ni)}>;\n`,
+        `${ni}[Symbol.iterator]?(): Iterator<${this.internalGenerateType(iterType, ni)}>;\n`,
       );
     }
 
